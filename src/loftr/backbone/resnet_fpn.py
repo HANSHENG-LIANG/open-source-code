@@ -1,3 +1,4 @@
+import pdb
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -37,7 +38,7 @@ class BasicBlock(nn.Module):
         if self.downsample is not None:
             x = self.downsample(x)
 
-        return self.relu(x+y)
+        return self.relu(x+y) # shortcut & residual
 
 
 class ResNetFPN_8_2(nn.Module):
@@ -97,23 +98,24 @@ class ResNetFPN_8_2(nn.Module):
         self.in_planes = dim
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x): # x: [2, 1, 480, 640])
+     
         # ResNet Backbone
-        x0 = self.relu(self.bn1(self.conv1(x)))
+        x0 = self.relu(self.bn1(self.conv1(x))) # [2, 128, 240, 320]
         x1 = self.layer1(x0)  # 1/2
         x2 = self.layer2(x1)  # 1/4
-        x3 = self.layer3(x2)  # 1/8
+        x3 = self.layer3(x2)  # 1/8 # [2, 256, 60, 80]   feature map↓ channel dim↑
 
         # FPN
-        x3_out = self.layer3_outconv(x3)
+        x3_out = self.layer3_outconv(x3) # [2, 256, 60, 80]
 
-        x3_out_2x = F.interpolate(x3_out, scale_factor=2., mode='bilinear', align_corners=True)
+        x3_out_2x = F.interpolate(x3_out, scale_factor=2., mode='bilinear', align_corners=True) # [2, 256, 120, 160])
         x2_out = self.layer2_outconv(x2)
-        x2_out = self.layer2_outconv2(x2_out+x3_out_2x)
+        x2_out = self.layer2_outconv2(x2_out+x3_out_2x) # residual & shotcut
 
         x2_out_2x = F.interpolate(x2_out, scale_factor=2., mode='bilinear', align_corners=True)
         x1_out = self.layer1_outconv(x1)
-        x1_out = self.layer1_outconv2(x1_out+x2_out_2x)
+        x1_out = self.layer1_outconv2(x1_out+x2_out_2x) # x1_out: [2, 128, 240, 320]
 
         return [x3_out, x1_out]
 
